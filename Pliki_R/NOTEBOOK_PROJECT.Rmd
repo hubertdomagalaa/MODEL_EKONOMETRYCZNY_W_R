@@ -1,0 +1,170 @@
+---
+title: "Wizualizacje modelu ekonometrycznego"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Biblioteki użyte do projektu:
+**ggplot2**:
+**Opis**: ggplot2 to jedna z najpopularniejszych bibliotek do tworzenia wykresów w języku R. Jest oparta na gramatyce graficznej, co oznacza, że tworzenie wykresów polega na określeniu, jakie dane mają być przedstawione i w jakim stylu mają być wyświetlone.
+
+**dplyr**:
+**Opis**: dplyr to biblioteka do manipulacji danymi. Zapewnia intuicyjne funkcje do filtrowania, sortowania, grupowania i agregowania danych.
+
+**tidyr**:
+**Opis**: tidyr to biblioteka służąca do przekształcania danych w formacie "wide" na "long" i odwrotnie. Pomaga w uporządkowaniu danych w sposób odpowiedni do analizy.
+Reszta bibliotek zastosowanych służy głównie do sprzątania danych
+ 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(reshape2)
+library(corrplot)
+library(ggraph)
+library(plotly)
+library(fitdistrplus)
+library(lmtest)
+```
+
+Potencjalny zbiór danych
+Wybór Podzbioru Danych: Kod wybiera pierwsze siedem wierszy z ramki danych dane_do_modelu_r.
+Przygotowanie Danych dla Modelu Regresji: Tworzy nową ramkę danych model, zawierającą wybrane kolumny: y_pkb_per_capita (zmienna zależna), X1_dochodz_na_osobe i x2_ropa (zmienne niezależne). To przygotowuje zestaw danych do analizy regresyjnej.
+Przetwarzanie Zmiennych: Zmienna zależna y (PKB per capita) jest konwertowana na wektor. Podobnie, zmienne niezależne X1_dochodz_na_osobe (dochód na osobę) i x2_ropa (cena ropy) są łączone i przekształcane w pojedynczy wektor.
+```{r}
+wszystkie_dane <- dane_do_modelu_r[1:7, ]
+print(wszystkie_dane)
+
+model <- dane_do_modelu_r[ , c('y_pkb_per_capita', 'X1_dochodz_na_osobe', 'x2_ropa')]
+y <- dane_do_modelu_r[ , c('y_pkb_per_capita')]
+y <- unlist(y)
+
+
+x <- dane_do_modelu_r[ , c('X1_dochodz_na_osobe','x2_ropa')]
+x <- unlist(x)
+
+x1 <- dane_do_modelu_r[ , c('X1_dochodz_na_osobe')]
+x1 <- unlist(x1)
+
+x2 <- dane_do_modelu_r[ , c('x2_ropa')]
+x2 <- unlist(x2)
+```
+BADANIE ZMIENNOŚCI
+Każda zmienna jest większa niż V*=15 więc żadna zmienna nie zostanie wykluczona na typ etapie
+```{r}
+
+#MIARY STATYSTYCZNE
+statystyki_wszystkie_dane <- summary(wszystkie_dane)
+statystyki_wszystkie_dane
+
+#ŚREDNIA
+column_means_wszystkie_dane <- colMeans(wszystkie_dane)
+column_means_wszystkie_dane
+
+#ODCHYLENIE STANDARDOWE
+column_std_wszystkie_dane <- apply(wszystkie_dane, 2, sd)
+column_std_wszystkie_dane
+
+#ZMIENNOŚĆ
+variability_wszystkie_dane <- column_std_wszystkie_dane / column_means_wszystkie_dane
+variability_wszystkie_dane
+
+
+```
+
+
+BADANIE KORELACJI
+
+Wizualizacja Macierzy Korelacji: Używa funkcji corrplot() z pakietu corrplot do wygenerowania wizualizacji macierzy korelacji.
+
+Z interpretacji heatmapy wynika:
+
+1. Zmienna `y_pkb_per_capita` wykazuje silną korelację dodatnią z `x1_dochodz_na_osobe`, `x3_ilosc_mieszkan_wydanych`, `x4_cegla` i `x5_cement`, co sugeruje, że wzrost tych zmiennych może być związany ze wzrostem PKB per capita.
+
+2. `x1_dochodz_na_osobe` (dochód na osobę) wykazuje również silną korelację z `x3_ilosc_mieszkan_wydanych`, `x4_cegla` i `x5_cement`, co może sugerować, że te zmienne są powiązane z dobrobytem gospodarczym lub rozwojem infrastruktury.
+
+3. `x2_ropa` (cena ropy) ma niższą korelację z innymi zmiennymi, co może oznaczać, że jej wpływ na inne zmienne ekonomiczne jest mniej bezpośredni lub jest zbalansowany przez inne czynniki.
+
+Następnie zastosowaliśmy
+ANALIZE WSPÓŁCZYNNIKÓW KORELACJI:
+r* = 0.4437
+Po zastosowaniu ówczesnej metody do naszego modelu wchodzi x1 oraz x2.
+(Metoda zastosowana z książki J. Dziechciarza pt. "Ekonometria- Metody, przykłady, zadania)
+
+```{r}
+correlation_matrix <- cor(wszystkie_dane)
+correlation <- melt(correlation_matrix)
+
+
+corrplot(correlation_matrix, method='color', type='upper', tl.col = "red", tl.srt = 45, 
+         addCoef.col = "white", number.cex = 0.7)
+```
+Korelacja pomiędzy najsilniej skorelowaną zmienną objaśniającą a zmienną objaśnianą
+Ten kod w R tworzy dwa rodzaje wizualizacji korelacji między dwiema zmiennymi, `x1` i `y`. 
+```{r}
+korelacja_x1_y <- plot(x1, y, 
+                       main = 'Korelacja pomiędzy zm.objaśnianą a zmienną objaśniającą x1',
+                       xlab = 'Wartości X1',
+                       ylab = 'Wartości Y')
+unlisted_y <- unlist(y)
+corr_abline <- lm(y ~ x1)
+
+abline(corr_abline, col="red")
+corr_abline
+
+x_y <- ggplot(model, aes(x=x1, y=y)) +
+  geom_point(color='red') +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  ggtitle('Scatter najsilniejszej korelacji') +
+  xlab('X1') +
+  ylab('Y')
+
+interactive <- x_y + geom_segment(aes(xend = x1, yend = y), linetype = "dashed", color = "black")
+
+ggplotly(interactive)
+
+plt <- plot_ly(data = model, 
+               x= ~X1_dochodz_na_osobe, 
+               y= ~y_pkb_per_capita,
+               type = 'scatter')
+plt
+```
+MIARY STATYSTYCZNE-dla danych które przeszły proces eliminacji
+Ten fragment kodu w R realizuje podstawową analizę statystyczną na ramce danych `model`. Początkowo, za pomocą funkcji `summary()`, generuje podsumowanie statystyczne modelu, w tym między innymi estymacje współczynników, które następnie są wyświetlane. Dalej kod oblicza średnią dla każdej kolumny w `model` przy użyciu `colMeans()`, a także standardowe odchylenie dla każdej kolumny za pomocą funkcji `apply()` z `sd`. Na koniec obliczana jest zmienność każdej kolumny jako stosunek standardowego odchylenia do średniej.
+
+ROZKŁADY ZMIENNYCH
+W podanym fragmencie kodu R, wykonuje się dopasowanie rozkładu normalnego do dwóch zmiennych, `x1` i `x2`, za pomocą funkcji `fitdist()` z pakietu `fitdistrplus`. Następnie, dla każdej zmiennej generowane są wykresy ilustrujące dopasowanie tego rozkładu, co pozwala na wizualną ocenę, jak dobrze dane zgadzają się z założeniem normalności rozkładu.
+```{r}
+#x1
+normal_dist_x1 <- fitdist(x1, "norm")
+plot(normal_dist_x1)
+
+#x2
+normal_dist_x2 <- fitdist(x2, "norm")
+plot(normal_dist_x2)
+```
+MODEL EKONOMETRYCZNY I DODATKOWE WIZUALIZACJE
+W podanym fragmencie kodu w R, tworzony jest model regresji liniowej (`linear_mod`) z `y` jako zmienną zależną oraz `x1` i `x2` jako zmiennymi niezależnymi. Model ten jest następnie poddawany analizie przy użyciu `summary()` do wyświetlenia statystyk modelu, a funkcja `plot()` jest używana do generowania serii standardowych wykresów diagnostycznych modelu regresji.
+```{r}
+linear_mod <- lm(y ~ x1 + x2)
+linear_mod
+summary(linear_mod)
+plot(linear_mod)
+
+hist_reszty <- hist(linear_mod$residuals, 
+                    breaks = 20, 
+                    xlab='reszty',
+                    ylab = 'ilość',
+                    col='orange')
+
+
+
+#TEST SHAPIRO WILKA
+shapiro.test(linear_mod$residuals)
+#Reszty mają rozkład normalny 
+
+#DURBIN-WATSON
+dwtest(formula = linear_mod,  alternative = "two.sided")
+```
